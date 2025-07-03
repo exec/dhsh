@@ -1,0 +1,534 @@
+#include "dhsh.h"
+#include <fcntl.h>
+#include <termios.h> // For terminal control
+
+// Global history buffer
+char *g_dhsh_history_commands[DHSH_HISTORY_SIZE];
+int g_dhsh_history_count = 0;
+
+// Global termios structures to save and restore terminal settings
+static struct termios g_original_termios;
+static struct termios g_raw_termios;
+
+// Function to restore original terminal settings
+void dhsh_restore_termios(void) {
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &g_original_termios);
+}
+
+// Signal handler for SIGINT (Ctrl+C)
+void dhsh_sigint_handler(int signo __attribute__((unused))) {
+    // Restore original termios settings temporarily to print newline cleanly
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &g_original_termios);
+    printf("\n"); // Print a newline to clear the current line
+    fflush(stdout);
+    // Reapply raw mode for the next prompt
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &g_raw_termios);
+}
+
+
+// --- Built-in Command Implementations ---
+
+// Forward declarations for built-in commands
+int dhsh_cd(char **args);
+int dhsh_help(char **args);
+int dhsh_exit(char **args);
+int dhsh_export(char **args);
+int dhsh_unset(char **args);
+int dhsh_history(char **args);
+int dhsh_echo(char **args);
+
+// Built-in command: echo
+int dhsh_echo(char **args) {
+    if (args[1] == NULL) {
+        printf("\n");
+    } else {
+        for (int i = 1; args[i] != NULL; i++) {
+            printf("%s%s", args[i], (args[i+1] != NULL) ? " " : "");
+        }
+        printf("\n");
+    }
+    return 1;
+}
+
+// Array of built-in command names
+char *builtin_str[] = {
+    "cd",
+    "help",
+    "exit",
+    "export",
+    "unset",
+    "history",
+    "echo"
+};
+
+// Array of corresponding built-in function pointers
+int (*builtin_func[]) (char **) = {
+    &dhsh_cd,
+    &dhsh_help,
+    &dhsh_exit,
+    &dhsh_export,
+    &dhsh_unset,
+    &dhsh_history,
+    &dhsh_echo
+};
+
+// Returns the number of built-in commands
+int dhsh_num_builtins() {
+    return sizeof(builtin_str) / sizeof(char *);
+}
+
+// Built-in command: change directory
+int dhsh_cd(char **args) {
+    if (args[1] == NULL) {
+        fprintf(stderr, "dhsh: expected argument to \"cd\"\n");
+    } else {
+        // Check return value of chdir for errors
+        if (chdir(args[1]) != 0) {
+            perror("dhsh");
+        }
+    }
+    return 1; // Always continue the loop
+}
+
+// Built-in command: display help
+int dhsh_help(char **args __attribute__((unused))) {
+    printf("dhsh - The Dumb, Hardened Shell\n");
+    printf("A minimalist, security-focused Linux shell.\n\n");
+    printf("The following built-in commands are available:\n");
+    for (int i = 0; i < dhsh_num_builtins(); i++) {
+        printf("  %s\n", builtin_str[i]);
+    }
+    printf("\nAll other commands are executed via the system's PATH.\n");
+    printf("Features like scripting are intentionally excluded for security. Piping and I/O redirection are supported.\n");
+    return 1; // Always continue the loop
+}
+
+// Built-in command: exit shell
+int dhsh_exit(char **args __attribute__((unused))) {
+    return 0; // Signal to terminate the loop
+}
+
+// Built-in command: set environment variable
+int dhsh_export(char **args) {
+    if (args[1] == NULL) {
+        fprintf(stderr, "dhsh: expected argument to \"export\" (e.g., VAR=value)\n");
+    } else {
+        char *name = args[1];
+        char *value = strchr(name, '=');
+        if (value == NULL) {
+            fprintf(stderr, "dhsh: export: invalid argument format. Use VAR=value\n");
+        } else {
+            *value = '\0'; // Null-terminate the name part
+            value++; // Move past the '=' to the value part
+            if (setenv(name, value, 1) != 0) { // Overwrite if exists
+                perror("dhsh");
+            }
+        }
+    }
+    return 1;
+}
+
+// Built-in command: unset environment variable
+int dhsh_unset(char **args) {
+    if (args[1] == NULL) {
+        fprintf(stderr, "dhsh: expected argument to \"unset\" (e.g., VAR)\n");
+    } else {
+        if (unsetenv(args[1]) != 0) {
+            perror("dhsh");
+        }
+    }
+    return 1;
+}
+
+// Built-in command: display history
+int dhsh_history(char **args __attribute__((unused))) {
+    for (int i = 0; i < g_dhsh_history_count; i++) {
+        printf("%d: %s\n", i, g_dhsh_history_commands[i]);
+    }
+    return 1;
+}
+
+
+
+// --- Core Shell Logic ---
+
+
+// Launch a program and wait for it to terminate
+int dhsh_launch(char **args) {
+    pid_t pid;
+    int status;
+
+    pid = fork();
+    if (pid == 0) {
+        // Child process
+        // Handle redirections
+        if (dhsh_parse_redirections(&args) == -1) {
+            _exit(EXIT_FAILURE);
+        }
+
+        // execvp replaces the child process with the new program.
+        // It only returns if an error occurs.
+        if (execvp(args[0], args) == -1) {
+            perror("dhsh");
+        }
+        // Use _exit() in child after fork() on exec error.
+        // It terminates immediately without calling atexit() handlers.
+        _exit(EXIT_FAILURE);
+    } else if (pid < 0) {
+        // Error forking
+        perror("dhsh");
+    } else {
+        // Parent process
+        // Wait for the child process to complete.
+        do {
+            waitpid(pid, &status, WUNTRACED);
+        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+    }
+
+    return 1; // Signal to continue
+}
+
+// Launch a series of commands connected by pipes
+// Launch a series of commands connected by pipes
+int dhsh_launch_pipe(char **args, int num_pipes) {
+    int num_commands = num_pipes + 1;
+    char **commands[num_commands];
+    int command_start = 0;
+    int command_index = 0;
+
+    // Split the arguments into commands
+    for (int i = 0; args[i] != NULL; i++) {
+        if (strcmp(args[i], "|") == 0) {
+            args[i] = NULL;
+            commands[command_index++] = &args[command_start];
+            command_start = i + 1;
+        }
+    }
+    commands[command_index] = &args[command_start];
+
+    int pipefd[2];
+    int in_fd = 0;
+    pid_t pid;
+
+    for (int i = 0; i < num_commands; i++) {
+        if (pipe(pipefd) == -1) {
+            perror("dhsh");
+            return 1;
+        }
+        pid = fork();
+
+        if (pid == 0) {
+            // Child process
+            // Reset SIGINT handler to default in child process
+            signal(SIGINT, SIG_DFL);
+
+            if (in_fd != 0) {
+                dup2(in_fd, 0);
+                close(in_fd);
+            }
+            if (i < num_commands - 1) {
+                dup2(pipefd[1], 1);
+                close(pipefd[1]);
+            }
+            close(pipefd[0]);
+
+            // Handle redirections for each command in the pipe
+            if (dhsh_parse_redirections(&commands[i]) == -1) {
+                _exit(EXIT_FAILURE);
+            }
+
+            execvp(commands[i][0], commands[i]);
+            perror("dhsh");
+            _exit(EXIT_FAILURE);
+        } else if (pid < 0) {
+            perror("dhsh");
+            return 1;
+        }
+
+        // Parent process
+        int status;
+        waitpid(pid, &status, 0);
+        close(pipefd[1]);
+        in_fd = pipefd[0];
+    }
+
+    return 1;
+}
+
+// Parses redirection operators and their files from the arguments.
+int dhsh_parse_redirections(char ***args_ptr) {
+    char **args = *args_ptr;
+    int i, j;
+    int fd;
+
+    for (i = 0, j = 0; args[i] != NULL; i++) {
+        if (strcmp(args[i], ">") == 0) {
+            if (args[i+1] == NULL) {
+                fprintf(stderr, "dhsh: syntax error: missing file for redirection\n");
+                return -1;
+            }
+            fd = open(args[i+1], O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if (fd < 0) {
+                perror("dhsh");
+                return -1;
+            }
+            dup2(fd, STDOUT_FILENO);
+            close(fd);
+            i++; // Skip filename
+        } else if (strcmp(args[i], ">>") == 0) {
+            if (args[i+1] == NULL) {
+                fprintf(stderr, "dhsh: syntax error: missing file for redirection\n");
+                return -1;
+            }
+            fd = open(args[i+1], O_WRONLY | O_CREAT | O_APPEND, 0644);
+            if (fd < 0) {
+                perror("dhsh");
+                return -1;
+            }
+            dup2(fd, STDOUT_FILENO);
+            close(fd);
+            i++; // Skip filename
+        } else if (strcmp(args[i], "<") == 0) {
+            if (args[i+1] == NULL) {
+                fprintf(stderr, "dhsh: syntax error: missing file for redirection\n");
+                return -1;
+            }
+            fd = open(args[i+1], O_RDONLY);
+            if (fd < 0) {
+                perror("dhsh");
+                return -1;
+            }
+            dup2(fd, STDIN_FILENO);
+            close(fd);
+            i++; // Skip filename
+        } else if (strcmp(args[i], "2>") == 0) {
+            if (args[i+1] == NULL) {
+                fprintf(stderr, "dhsh: syntax error: missing file for redirection\n");
+                return -1;
+            }
+            fd = open(args[i+1], O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if (fd < 0) {
+                perror("dhsh");
+                return -1;
+            }
+            dup2(fd, STDERR_FILENO);
+            close(fd);
+            i++; // Skip filename
+        } else if (strcmp(args[i], "&>") == 0) {
+            if (args[i+1] == NULL) {
+                fprintf(stderr, "dhsh: syntax error: missing file for redirection\n");
+                return -1;
+            }
+            fd = open(args[i+1], O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if (fd < 0) {
+                perror("dhsh");
+                return -1;
+            }
+            dup2(fd, STDOUT_FILENO);
+            dup2(fd, STDERR_FILENO);
+            close(fd);
+            i++; // Skip filename
+        } else {
+            args[j++] = args[i];
+        }
+    }
+    args[j] = NULL; // Null-terminate the new args array
+    return 0;
+}
+
+// Execute shell built-in or launch program
+int dhsh_execute(char **args) {
+    if (args[0] == NULL) {
+        // An empty command was entered.
+        return 1;
+    }
+
+    // Check for pipes
+    int num_pipes = 0;
+    for (int i = 0; args[i] != NULL; i++) {
+        if (strcmp(args[i], "|") == 0) {
+            num_pipes++;
+        }
+    }
+
+    if (num_pipes > 0) {
+        return dhsh_launch_pipe(args, num_pipes);
+    }
+
+    // Check if the command is a built-in
+    for (int i = 0; i < dhsh_num_builtins(); i++) {
+        if (strcmp(args[0], builtin_str[i]) == 0) {
+            return (*builtin_func[i])(args);
+        }
+    }
+
+    // If not a built-in, launch it as an external command
+    return dhsh_launch(args);
+}
+
+// Read a line from stdin, handling dynamic resizing and basic line editing
+
+
+
+
+// 
+
+// Read a line from stdin, handling dynamic resizing and basic line editing
+
+char **dhsh_split_line(char *line) {
+    int bufsize = DHSH_TOK_BUFSIZE;
+    int position = 0;
+    char **tokens = malloc(bufsize * sizeof(char*));
+    char *token;
+    char *line_ptr = line; // Pointer for strsep
+
+    // Check if malloc succeeded
+    if (!tokens) {
+        fprintf(stderr, "dhsh: allocation error\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // strsep modifies the string, so we use a pointer to it
+    while ((token = strsep(&line_ptr, DHSH_TOK_DELIM)) != NULL) {
+        // Skip empty tokens resulting from multiple delimiters
+        if (*token == '\0') {
+            continue;
+        }
+        tokens[position] = token;
+        position++;
+
+        if (position >= bufsize) {
+            bufsize += DHSH_TOK_BUFSIZE;
+            tokens = realloc(tokens, bufsize * sizeof(char*));
+            // Check if realloc succeeded
+            if (!tokens) {
+                fprintf(stderr, "dhsh: allocation error\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+    }
+    tokens[position] = NULL; // Null-terminate the array of tokens
+    return tokens;
+}
+
+// Split a line into commands (separated by '|')
+char **dhsh_split_line_pipe(char *line) {
+    int bufsize = DHSH_TOK_BUFSIZE;
+    int position = 0;
+    char **tokens = malloc(bufsize * sizeof(char*));
+    char *token;
+    char *line_ptr = line; // Pointer for strsep
+
+    // Check if malloc succeeded
+    if (!tokens) {
+        fprintf(stderr, "dhsh: allocation error\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // strsep modifies the string, so we use a pointer to it
+    while ((token = strsep(&line_ptr, "|")) != NULL) {
+        // Trim leading and trailing whitespace
+        while (*token == ' ' || *token == '\t' || *token == '\n' || *token == '\r') {
+            token++;
+        }
+        char *end = token + strlen(token) - 1;
+        while (end > token && (*end == ' ' || *end == '\t' || *end == '\n' || *end == '\r')) {
+            *end = '\0';
+            end--;
+        }
+
+        // Skip empty tokens resulting from multiple delimiters or trimming
+        if (*token == '\0') {
+            continue;
+        }
+        tokens[position] = token;
+        position++;
+
+        if (position >= bufsize) {
+            bufsize += DHSH_TOK_BUFSIZE;
+            tokens = realloc(tokens, bufsize * sizeof(char*));
+            // Check if realloc succeeded
+            if (!tokens) {
+                fprintf(stderr, "dhsh: allocation error\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+    }
+    tokens[position] = NULL; // Null-terminate the array of tokens
+    return tokens;
+}
+
+// Main shell loop
+void dhsh_loop(void) {
+    char *line;
+    char **args;
+    int status;
+    char cwd[1024];
+    char *user;
+    char *host;
+
+    user = getenv("USER");
+    if (!user) user = "user";
+
+    char hostname[1024];
+    gethostname(hostname, 1024);
+    host = hostname;
+    if (!host) host = "localhost";
+
+    do {
+        // Get current working directory for the prompt
+        if (getcwd(cwd, sizeof(cwd)) != NULL) {
+             printf("%s%s@%s %s%s%s$ ", DHSH_COLOR_WHITE, user, host, DHSH_COLOR_CYAN, cwd, DHSH_COLOR_RESET);
+        } else {
+            // Fallback prompt if getcwd fails
+            printf("%s%s@%s %s?%s$ ", DHSH_COLOR_WHITE, user, host, DHSH_COLOR_CYAN, DHSH_COLOR_RESET);
+        }
+
+        line = dhsh_read_line();
+        if (line == NULL) { // Handle EOF
+            status = 0;
+            printf("\n");
+        } else {
+            // Store command in history
+            if (g_dhsh_history_count < DHSH_HISTORY_SIZE) {
+                g_dhsh_history_commands[g_dhsh_history_count] = strdup(line);
+                g_dhsh_history_count++;
+            } else {
+                free(g_dhsh_history_commands[0]); // Free oldest command
+                for (int i = 0; i < DHSH_HISTORY_SIZE - 1; i++) {
+                    g_dhsh_history_commands[i] = g_dhsh_history_commands[i+1];
+                }
+                g_dhsh_history_commands[DHSH_HISTORY_SIZE - 1] = strdup(line);
+            }
+
+            args = dhsh_split_line(line);
+            status = dhsh_execute(args);
+            free(line);
+            free(args);
+        }
+    } while (status);
+}
+
+// --- Main Entry Point ---
+
+int main(int argc __attribute__((unused)), char **argv __attribute__((unused))) {
+    // Save original terminal settings
+    tcgetattr(STDIN_FILENO, &g_original_termios);
+    atexit(dhsh_restore_termios); // Ensure settings are restored on exit
+
+    // Set terminal to raw mode
+    g_raw_termios = g_original_termios;
+    g_raw_termios.c_lflag &= ~(ICANON | ECHO); // Disable canonical mode and echoing
+    g_raw_termios.c_cc[VMIN] = 1;  // Read 1 character at a time
+    g_raw_termios.c_cc[VTIME] = 0; // No timeout
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &g_raw_termios);
+
+    // In a real shell, one would load config files here.
+    // dhsh has no config files for simplicity and security.
+
+    // Run the command loop.
+    dhsh_loop();
+
+    // Perform any shutdown/cleanup.
+    return EXIT_SUCCESS;
+}
