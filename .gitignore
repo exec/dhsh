@@ -16,5 +16,9 @@ core
 vgcore.*
 *.log
 
+# Test binaries
+test_security
+scripts/test_security
+
 # Internal docs
 CLAUDE.md
