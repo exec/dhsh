@@ -1,6 +1,6 @@
 # dhsh - The Dumb Hard Shell
 
-A minimalist, security-focused Linux shell that prioritizes safety over features.
+A modern, feature-rich Linux shell with security by default and configurable paranoia.
 
 ## Features
 
@@ -10,20 +10,23 @@ A minimalist, security-focused Linux shell that prioritizes safety over features
 - **I/O redirection**: Support for `>`, `>>`, `<`, `2>`, `&>`
 - **Command history**: Navigate with up/down arrows
 - **Line editing**: Full terminal control with backspace, Ctrl+U
-- **Built-in commands**: `cd`, `help`, `exit`, `export`, `unset`, `history`, `echo`
+- **Built-in commands**: `cd`, `help`, `exit`, `export`, `unset`, `history`, `echo`, `config`
 
 ### Security Features
-- **Hardened compilation**: Built with `-D_FORTIFY_SOURCE=3`, stack protector, PIE/ASLR
-- **Input validation**:
-  - Command length limits (4096 chars)
-  - Argument count limits (256 args)
-  - Path length validation
-- **Protected environment variables**: Blocks modification of `LD_PRELOAD`, `LD_LIBRARY_PATH`, `PATH`, etc.
-- **Memory safety**: Proper cleanup on exit, no memory leaks
-- **Path resolution**: Uses `realpath()` to prevent directory traversal
-- **Optional seccomp filters**: Can restrict syscalls for child processes
+
+#### Security by Default (Configurable)
+- **Input validation**: Command length limits (4096 chars), argument count limits (256 args)
+- **Environment protection**: Blocks modification of critical variables (`LD_PRELOAD`, `PATH`, `IFS`, etc.)
+- **Path traversal protection**: Prevents `../` directory traversal attacks
+- **Security-by-default**: Expansion features disabled to prevent injection attacks
+
+#### High-Paranoid Mode
+- **Seccomp filters**: Restrict child processes to safe syscalls
+- **Command whitelist**: Allow only specific commands
+- **No shell expansions**: Variable, command, glob, arithmetic expansion disabled
 
 ### Configuration
+
 dhsh reads `~/.dhshrc` on startup for customizable settings:
 
 ```bash
@@ -82,51 +85,87 @@ unset MY_VAR
 # Command history
 history              # Show command history
 ↑/↓                 # Navigate history
+
+# Configuration
+config               # View all settings
+config set seccomp_filter ON  # Enable paranoid mode
+```
+
+## Configuration Modes
+
+### Default (Balanced) Mode
+Full-featured shell with baseline security:
+- All built-ins enabled
+- Expansions disabled (secure by default)
+- Input validation enabled
+- Environment protection enabled
+- Seccomp disabled (for compatibility)
+
+### Paranoid Mode (Maximum Security)
+Enable in `.dhshrc`:
+```bash
+# Maximum security - disable dangerous features
+expansion_variable = OFF
+expansion_command = OFF
+expansion_globbing = OFF
+seccomp_filter = ON
+command_whitelist = ON
+```
+
+### Convenience Mode (Maximum Features)
+Enable in `.dhshrc`:
+```bash
+# Full features - enable all expansions
+expansion_variable = ON
+expansion_command = ON
+expansion_globbing = ON
+seccomp_filter = OFF
+command_whitelist = OFF
 ```
 
 ## Security Philosophy
 
-dhsh follows the principle of "security through simplicity":
+dhsh follows "security by configuration":
 
-1. **No shell scripting**: Eliminates entire classes of injection vulnerabilities
-2. **No expansions**: No variable, arithmetic, command, or pathname expansion
-3. **No globbing**: Treats `*` and `?` literally
+1. **Secure by default**: Dangerous features (expansions) are disabled
+2. **Configurable paranoia**: Enable higher security via `.dhshrc`
+3. **No shell scripting**: Eliminates entire classes of injection vulnerabilities by default
 4. **Minimal attack surface**: Small codebase that's easy to audit
-5. **Secure by default**: Restrictive permissions and validations
+5. **Explicit trade-offs**: You decide between convenience and security
 
 ## Limitations
 
-By default, dhsh is configured with security features enabled. These can be customized in `~/.dhshrc`:
-
-**Security-by-default (configurable):**
-- No shell scripting (if, for, while, functions)
-- No variable expansion (`$VAR`, `${VAR}`) - disable `expansion_variable` to enable
-- No command substitution (`$(cmd)` or `` `cmd` ``) - disable `expansion_command` to enable
-- No arithmetic operations (`$((2+2))`) - disable `expansion_arithmetic` to enable
-- No pathname globbing (`*.txt`) - disable `expansion_globbing` to enable
-- No job control (background processes with `&`)
+**By default, dhsh does NOT support:**
+- Variable expansion (`$VAR`, `${VAR}`) - disable `expansion_variable` to enable
+- Command substitution (`$(cmd)` or `` `cmd` ``) - disable `expansion_command` to enable
+- Arithmetic operations (`$((2+2))`) - disable `expansion_arithmetic` to enable
+- Pathname globbing (`*.txt`) - disable `expansion_globbing` to enable
+- Brace expansion (`{a,b}`) - disable `expansion_brace` to enable
+- Job control (background processes with `&`)
+- Heredocs - disable `heredoc` to enable
 
 **Note**: Expansion features are disabled by default for security. Enable them in `.dhshrc` only if needed.
 
 ## Use Cases
 
 dhsh is ideal for:
-- Restricted user accounts
-- Container entrypoints
-- High-security environments
-- Systems where shell exploits must be prevented
-- Embedded systems with limited resources
+- **Restricted user accounts** with configurable access levels
+- **Container entrypoints** with minimal attack surface
+- **High-security environments** where Paranoid Mode is enabled
+- **Systems where shell exploits must be prevented**
+- **Embedded systems** with limited resources
+- **Multi-user systems** where users need shell access but shouldn't break things
 
 ## Testing
 
 ```bash
-./test.sh              # Run basic functionality tests
-./fuzz.sh              # Run fuzzing tests for security
+./scripts/fuzz.sh              # Run fuzzing tests for security
+gcc -Iinclude -o test test_security.c src/dhsh_security.c && ./test  # Security unit tests
 ```
 
 ## License
 
-[Add your license here]
+MIT License - see LICENSE file
 
 ## Contributing
 
@@ -135,3 +174,4 @@ Security is paramount. Any contributions must:
 2. Not increase complexity unnecessarily
 3. Include tests for new functionality
 4. Follow existing code style
+5. Document security implications of changes

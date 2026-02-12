@@ -1,12 +1,45 @@
 # dhsh Configuration File (~/.dhshrc)
 # ====================================
 # This file controls which security features and shell behaviors are enabled.
-# Each setting can be ON (default) or OFF to disable the protection.
+# Each setting can be ON (enabled) or OFF (disabled).
 #
-# To disable a protection, change "ON" to "OFF".
-# Settings not specified use the default value shown here.
+# SETTINGS NOT SPECIFIED USE THE DEFAULT VALUE SHOWN HERE.
 #
-# NOTE: Disabling protections reduces security! Only disable what you need.
+# DEFAULT CONFIGURATION ( paranoid ):
+# - Full-featured shell (most things ON)
+# - Security-by-default (expansions disabled, validation enabled)
+# - Paranoid measures enabled (seccomp, env protection, path validation)
+#
+# To reduce security and enable more features (like shell scripting),
+# set the corresponding options to OFF.
+#
+# To enable maximum security, set paranoid mode to ON.
+# To enable maximum convenience, set convenience mode to ON.
+
+# ============================================================================
+# MODE PRESETS
+# ============================================================================
+
+# Mode: paranoid - maximum security, minimum features
+#   expansion_variable = OFF
+#   expansion_command = OFF
+#   expansion_globbing = OFF
+#   seccomp_filter = ON
+#   command_whitelist = ON
+#
+# Mode: balanced (default) - full features with baseline security
+#   expansion_variable = OFF
+#   expansion_command = OFF
+#   expansion_globbing = OFF
+#   seccomp_filter = OFF
+#   command_whitelist = OFF
+#
+# Mode: convenience - full features, minimal security
+#   expansion_variable = ON
+#   expansion_command = ON
+#   expansion_globbing = ON
+#   seccomp_filter = OFF
+#   command_whitelist = OFF
 
 # ============================================================================
 # CORE BEHAVIORS
@@ -14,7 +47,6 @@
 
 # Enable command history (up/down arrow navigation, history command)
 # Default: ON
-# Disabling removes history tracking entirely
 history = ON
 
 # History size (number of commands to remember)
@@ -23,7 +55,6 @@ history_size = 100
 
 # Enable command-line editing (arrow keys, backspace, Ctrl+U)
 # Default: ON
-# Disabling makes shell purely line-based
 line_editing = ON
 
 # Show colorful prompt with user@host and directory
@@ -52,7 +83,7 @@ max_arg_length = 1024
 
 # Block modification of critical environment variables
 # Protects: LD_PRELOAD, LD_LIBRARY_PATH, PATH, IFS, BASH_ENV, ENV, etc.
-# Default: ON
+# Default: ON (security by default)
 protect_env = ON
 
 # ============================================================================
@@ -146,7 +177,7 @@ builtin_whitelist = ON
 # Enable command whitelist mode
 # When ON: Only commands in whitelist can be executed
 # When OFF: Any command in PATH can be executed
-# Default: OFF (allows all commands - less secure but more flexible)
+# Default: OFF (allows all commands for convenience)
 command_whitelist = OFF
 
 # Whitelist file path (when command_whitelist = ON)
@@ -158,8 +189,9 @@ whitelist_file = /etc/dhsh_whitelist
 # ============================================================================
 
 # Apply seccomp syscall filtering to child processes
-# Default: OFF (disabled by default, enable for high-security environments)
+# Default: OFF (disabled by default for compatibility)
 # When ON: Child processes can only use a restricted set of syscalls
+# NOTE: Requires Linux kernel 3.17+ and seccomp support
 seccomp_filter = OFF
 
 # ============================================================================
@@ -181,27 +213,27 @@ max_path_length = 4096
 # WARNING: Enabling these reduces security by allowing injection attacks!
 
 # Variable expansion: $VAR, ${VAR}
-# Default: OFF
+# Default: OFF (secure default - prevents variable injection)
 expansion_variable = OFF
 
 # Command substitution: $(cmd), `cmd`
-# Default: OFF
+# Default: OFF (secure default - prevents command injection)
 expansion_command = OFF
 
 # Arithmetic expansion: $((2+2)), $[2+2]
-# Default: OFF
+# Default: OFF (secure default - prevents arithmetic injection)
 expansion_arithmetic = OFF
 
 # Pathname globbing: *.txt, ?.csv, [abc]
-# Default: OFF
+# Default: OFF (secure default - prevents path injection)
 expansion_globbing = OFF
 
 # Brace expansion: {a,b}, {1..10}
-# Default: OFF
+# Default: OFF (secure default - prevents brace injection)
 expansion_brace = OFF
 
 # Tilde expansion: ~, ~user
-# Default: OFF
+# Default: OFF (secure default)
 expansion_tilde = OFF
 
 # ============================================================================
@@ -209,7 +241,7 @@ expansion_tilde = OFF
 # ============================================================================
 
 # Enable heredoc syntax: <<DELIMITER ... DELIMITER
-# Default: OFF
+# Default: OFF (disabled by default)
 heredoc = OFF
 
 # ============================================================================
@@ -257,4 +289,3 @@ exit_on_eof = ON
 # Show "exit" message when shell exits
 # Default: ON
 exit_message = ON
-
