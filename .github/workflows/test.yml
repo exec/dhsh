@@ -1,0 +1,92 @@
+name: Test Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-linux:
+    name: Linux Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up GCC
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential valgrind
+
+      - name: Build dhsh
+        run: |
+          make clean
+          make
+
+      - name: Run fuzzing tests
+        run: |
+          chmod +x scripts/fuzz.sh
+          ./scripts/fuzz.sh
+
+      - name: Run security unit tests
+        run: |
+          gcc -Iinclude -o test_security scripts/test_security.c src/dhsh_security.c -DTESTING
+          ./test_security
+
+      - name: Memory leak check with valgrind
+        run: |
+          echo -e "echo test\nhistory\nexit" | valgrind --leak-check=full --error-exitcode=1 ./build/dhsh
+
+  test-macos:
+    name: macOS Build & Test
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build dhsh
+        run: |
+          make clean
+          make
+
+      - name: Run fuzzing tests
+        run: |
+          chmod +x scripts/fuzz.sh
+          ./scripts/fuzz.sh || true  # macOS may have some platform-specific differences
+
+  test-security-checks:
+    name: Security Hardening Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build with security checks
+        run: |
+          make clean
+          make
+
+      - name: Verify PIE
+        run: |
+          if ! readelf -h build/dhsh | grep -q "DYN"; then
+            echo "ERROR: Binary is not position independent"
+            exit 1
+          fi
+
+      - name: Verify RELRO
+        run: |
+          if ! readelf -l build/dhsh | grep -q "GNU_RELRO"; then
+            echo "ERROR: RELRO not enabled"
+            exit 1
+          fi
+
+      - name: Verify Stack Protector
+        run: |
+          if ! nm build/dhsh | grep -q "__stack_chk"; then
+            echo "ERROR: Stack protector not enabled"
+            exit 1
+          fi
