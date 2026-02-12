@@ -1,11 +1,15 @@
 #ifndef DHSH_SECURITY_H
 #define DHSH_SECURITY_H
 
+// Platform-specific includes
+#ifdef __linux__
 #include <sys/prctl.h>
 #include <linux/seccomp.h>
 #include <linux/filter.h>
 #include <linux/audit.h>
 #include <sys/syscall.h>
+#endif
+
 #include <stddef.h>
 #include <stdio.h>
 #include <errno.h>
@@ -29,6 +33,7 @@ int dhsh_validate_args(char **args);
 int dhsh_sanitize_env(const char *name, const char *value);
 
 // Function to apply seccomp filters to child processes
+// On non-Linux platforms, this is a no-op
 void dhsh_apply_child_seccomp(void);
 
 // Function to check if a command is in the allowed list
