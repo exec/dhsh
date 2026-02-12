@@ -1,0 +1,260 @@
+# dhsh Configuration File (~/.dhshrc)
+# ====================================
+# This file controls which security features and shell behaviors are enabled.
+# Each setting can be ON (default) or OFF to disable the protection.
+#
+# To disable a protection, change "ON" to "OFF".
+# Settings not specified use the default value shown here.
+#
+# NOTE: Disabling protections reduces security! Only disable what you need.
+
+# ============================================================================
+# CORE BEHAVIORS
+# ============================================================================
+
+# Enable command history (up/down arrow navigation, history command)
+# Default: ON
+# Disabling removes history tracking entirely
+history = ON
+
+# History size (number of commands to remember)
+# Default: 100
+history_size = 100
+
+# Enable command-line editing (arrow keys, backspace, Ctrl+U)
+# Default: ON
+# Disabling makes shell purely line-based
+line_editing = ON
+
+# Show colorful prompt with user@host and directory
+# Default: ON
+colorful_prompt = ON
+
+# ============================================================================
+# INPUT VALIDATION
+# ============================================================================
+
+# Maximum command line length (characters)
+# Default: 4096
+max_cmd_length = 4096
+
+# Maximum number of arguments per command
+# Default: 256
+max_args = 256
+
+# Maximum length of any single argument
+# Default: 1024
+max_arg_length = 1024
+
+# ============================================================================
+# ENVIRONMENT VARIABLE PROTECTION
+# ============================================================================
+
+# Block modification of critical environment variables
+# Protects: LD_PRELOAD, LD_LIBRARY_PATH, PATH, IFS, BASH_ENV, ENV, etc.
+# Default: ON
+protect_env = ON
+
+# ============================================================================
+# REDIRECTION SUPPORT
+# ============================================================================
+
+# Enable output redirection: >
+# Default: ON
+redir_stdout = ON
+
+# Enable append redirection: >>
+# Default: ON
+redir_append = ON
+
+# Enable input redirection: <
+# Default: ON
+redir_input = ON
+
+# Enable stderr redirection: 2>
+# Default: ON
+redir_stderr = ON
+
+# Enable combined redirection: &>
+# Default: ON
+redir_both = ON
+
+# ============================================================================
+# COMMAND PIPELINE SUPPORT
+# ============================================================================
+
+# Enable piping commands together with |
+# Default: ON
+pipelines = ON
+
+# ============================================================================
+# BUILT-IN COMMANDS
+# ============================================================================
+
+# Enable cd command
+# Default: ON
+builtin_cd = ON
+
+# Enable export command
+# Default: ON
+builtin_export = ON
+
+# Enable unset command
+# Default: ON
+builtin_unset = ON
+
+# Enable history command
+# Default: ON
+builtin_history = ON
+
+# Enable echo command
+# Default: ON
+builtin_echo = ON
+
+# Enable pwd command
+# Default: ON
+builtin_pwd = ON
+
+# Enable env command
+# Default: ON
+builtin_env = ON
+
+# Enable clear command
+# Default: ON
+builtin_clear = ON
+
+# Enable date command
+# Default: ON
+builtin_date = ON
+
+# Enable whoami command
+# Default: ON
+builtin_whoami = ON
+
+# Enable aliases command
+# Default: ON
+builtin_aliases = ON
+
+# Enable whitelist command
+# Default: ON
+builtin_whitelist = ON
+
+# ============================================================================
+# WHITELIST CONTROL
+# ============================================================================
+
+# Enable command whitelist mode
+# When ON: Only commands in whitelist can be executed
+# When OFF: Any command in PATH can be executed
+# Default: OFF (allows all commands - less secure but more flexible)
+command_whitelist = OFF
+
+# Whitelist file path (when command_whitelist = ON)
+# Default: /etc/dhsh_whitelist
+whitelist_file = /etc/dhsh_whitelist
+
+# ============================================================================
+# SECCOMP FILTERS (LINUX ONLY)
+# ============================================================================
+
+# Apply seccomp syscall filtering to child processes
+# Default: OFF (disabled by default, enable for high-security environments)
+# When ON: Child processes can only use a restricted set of syscalls
+seccomp_filter = OFF
+
+# ============================================================================
+# FILE PATH RESTRICTIONS
+# ============================================================================
+
+# Block directory traversal attacks (../)
+# Default: ON
+path_traversal_protection = ON
+
+# Maximum path length allowed
+# Default: 4096
+max_path_length = 4096
+
+# ============================================================================
+# SHELL EXPANSION (DISABLED BY DEFAULT FOR SECURITY)
+# ============================================================================
+
+# WARNING: Enabling these reduces security by allowing injection attacks!
+
+# Variable expansion: $VAR, ${VAR}
+# Default: OFF
+expansion_variable = OFF
+
+# Command substitution: $(cmd), `cmd`
+# Default: OFF
+expansion_command = OFF
+
+# Arithmetic expansion: $((2+2)), $[2+2]
+# Default: OFF
+expansion_arithmetic = OFF
+
+# Pathname globbing: *.txt, ?.csv, [abc]
+# Default: OFF
+expansion_globbing = OFF
+
+# Brace expansion: {a,b}, {1..10}
+# Default: OFF
+expansion_brace = OFF
+
+# Tilde expansion: ~, ~user
+# Default: OFF
+expansion_tilde = OFF
+
+# ============================================================================
+# HEREDOC SUPPORT
+# ============================================================================
+
+# Enable heredoc syntax: <<DELIMITER ... DELIMITER
+# Default: OFF
+heredoc = OFF
+
+# ============================================================================
+# ALIASES
+# ============================================================================
+
+# Enable aliases feature
+# Default: ON
+aliases = ON
+
+# Maximum number of aliases
+# Default: 32
+max_aliases = 32
+
+# ============================================================================
+# PROMPT CUSTOMIZATION
+# ============================================================================
+
+# Custom prompt format (uses printf-style format)
+# Placeholders: %u (user), %h (hostname), %w (working directory), %p (prompt char)
+# Default: %u@%h %w$
+# Example: "%u@%h %w# " produces "user@host /dir# "
+prompt_format = %u@%h %w$
+
+# ============================================================================
+# LOGGING
+# ============================================================================
+
+# Log all commands executed (to syslog if available)
+# Default: OFF
+log_commands = OFF
+
+# Log file path (when log_commands = ON)
+# Default: /var/log/dhsh.log
+log_file = /var/log/dhsh.log
+
+# ============================================================================
+# EOF HANDLING
+# ============================================================================
+
+# Exit on EOF (Ctrl+D) with no input
+# Default: ON
+exit_on_eof = ON
+
+# Show "exit" message when shell exits
+# Default: ON
+exit_message = ON
+

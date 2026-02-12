@@ -6,7 +6,7 @@ A minimalist, security-focused Linux shell that prioritizes safety over features
 
 ### Core Functionality
 - **Process execution**: Launch any program in your PATH
-- **Piping**: Chain commands with `|` 
+- **Piping**: Chain commands with `|`
 - **I/O redirection**: Support for `>`, `>>`, `<`, `2>`, `&>`
 - **Command history**: Navigate with up/down arrows
 - **Line editing**: Full terminal control with backspace, Ctrl+U
@@ -14,7 +14,7 @@ A minimalist, security-focused Linux shell that prioritizes safety over features
 
 ### Security Features
 - **Hardened compilation**: Built with `-D_FORTIFY_SOURCE=3`, stack protector, PIE/ASLR
-- **Input validation**: 
+- **Input validation**:
   - Command length limits (4096 chars)
   - Argument count limits (256 args)
   - Path length validation
@@ -22,6 +22,24 @@ A minimalist, security-focused Linux shell that prioritizes safety over features
 - **Memory safety**: Proper cleanup on exit, no memory leaks
 - **Path resolution**: Uses `realpath()` to prevent directory traversal
 - **Optional seccomp filters**: Can restrict syscalls for child processes
+
+### Configuration
+dhsh reads `~/.dhshrc` on startup for customizable settings:
+
+```bash
+# View current configuration
+config
+
+# Set a configuration value
+config set history_size 200
+config set expansion_variable ON
+config set command_whitelist ON
+
+# Use a custom config file
+./build/dhsh -c /path/to/custom.rc
+```
+
+See `.dhshrc` for all available settings (38+ configurable options).
 
 ## Building
 
@@ -78,14 +96,17 @@ dhsh follows the principle of "security through simplicity":
 
 ## Limitations
 
-By design, dhsh does NOT support:
-- Shell scripts (no `if`, `for`, `while`, etc.)
-- Variable expansion (`$VAR`, `${VAR}`)
-- Command substitution (`$(cmd)` or `` `cmd` ``)
-- Arithmetic operations (`$((2+2))`)
-- Wildcard expansion (`*.txt`)
-- Aliases or functions
-- Job control (background processes with `&`)
+By default, dhsh is configured with security features enabled. These can be customized in `~/.dhshrc`:
+
+**Security-by-default (configurable):**
+- No shell scripting (if, for, while, functions)
+- No variable expansion (`$VAR`, `${VAR}`) - disable `expansion_variable` to enable
+- No command substitution (`$(cmd)` or `` `cmd` ``) - disable `expansion_command` to enable
+- No arithmetic operations (`$((2+2))`) - disable `expansion_arithmetic` to enable
+- No pathname globbing (`*.txt`) - disable `expansion_globbing` to enable
+- No job control (background processes with `&`)
+
+**Note**: Expansion features are disabled by default for security. Enable them in `.dhshrc` only if needed.
 
 ## Use Cases
 

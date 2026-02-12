@@ -228,10 +228,78 @@ void dhsh_apply_child_seccomp(void) {
     }
 }
 
+// Maximum number of whitelisted commands
+#define DHSH_MAX_WHITELIST 128
+
+// Whitelist of allowed commands
+const char *g_dhsh_whitelist[DHSH_MAX_WHITELIST] = {
+    "cat", "cd", "clear", "date", "echo", "env", "export", "history",
+    "help", "info", "jobs", "ls", "mkdir", "pwd", "rm", "rmdir",
+    "sleep", "sort", "tail", "tee", "test", "time", "true", "false",
+    "unset", "whoami", "uname", "ps", "top", "uptime", "who",
+    "groups", "id", "hostid", "hostname", "seq", "tr", "wc",
+    "head", "grep", "find", "which", "whereis", "type", "file",
+    "stat", "touch", "cp", "mv", "ln", "chmod", "chown", "chgrp",
+    "df", "du", "free", "kill", "ping", "ssh", "curl", "wget",
+    "nano", "vi", "vim", "less", "more", "diff", "patch",
+    "gzip", "gunzip", "tar", "zip", "unzip", "md5sum", "sha1sum",
+    "sha256sum", "base64", "xxd", "hexdump", "od", "printf",
+    "readlink", "realpath", "dirname", "basename", "mktemp",
+    "shuf", "fold", "paste", "cut", "join", "uniq", "comm",
+    "nl", "wc", "expand", "unexpand", "yes", "yes"
+};
+
+int g_dhsh_whitelist_count = 54;
+
+// Set the whitelist from an array of command names
+void dhsh_set_whitelist(const char **commands, int count) {
+    // If count <= 0, allow all commands
+    if (count <= 0) {
+        g_dhsh_whitelist_count = -1; // Special value meaning "allow all"
+        return;
+    }
+
+    if (count > DHSH_MAX_WHITELIST) {
+        count = DHSH_MAX_WHITELIST;
+    }
+    g_dhsh_whitelist_count = count;
+    for (int i = 0; i < count; i++) {
+        g_dhsh_whitelist[i] = commands[i];
+    }
+}
+
 // Check if a command is in the allowed list (optional whitelist)
 int dhsh_is_command_allowed(const char *cmd) {
-    // This is an optional feature - you can implement a whitelist of allowed commands
-    // For now, we'll allow all commands but you can customize this
-    (void)cmd; // Suppress unused parameter warning
-    return 1;
+    // If whitelist is empty, allow all commands
+    if (g_dhsh_whitelist_count <= 0) {
+        return 1;
+    }
+
+    // Check if command is in whitelist
+    for (int i = 0; i < g_dhsh_whitelist_count; i++) {
+        if (strcmp(cmd, g_dhsh_whitelist[i]) == 0) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+// Sanitize command line input to prevent injection attacks
+int dhsh_sanitize_input(const char *line) {
+    // Check for shell metacharacters that could be used for injection
+    // Note: > and 2> are allowed because dhsh handles them as redirection
+    const char *dangerous_chars = ";`|&$\n\r";
+
+    for (const char *p = line; *p; p++) {
+        // Check for dangerous characters
+        for (const char *d = dangerous_chars; *d; d++) {
+            if (*p == *d) {
+                fprintf(stderr, "dhsh: dangerous character '%c' in input\n", *p);
+                return -1;
+            }
+        }
+    }
+
+    return 0;
 }

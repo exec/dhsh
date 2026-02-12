@@ -33,6 +33,11 @@
 extern char *g_dhsh_history_commands[DHSH_HISTORY_SIZE];
 extern int g_dhsh_history_count;
 
+// Circular buffer indices
+extern int g_dhsh_history_head;  // Index of newest entry
+extern int g_dhsh_history_tail;  // Index of oldest entry
+extern int g_dhsh_history_full;  // Flag: buffer is full
+
 // Delimiters for command line parsing
 #define DHSH_TOK_DELIM " \t\r\n\a"
 
@@ -88,15 +93,115 @@ int dhsh_parse_redirections(char ***args_ptr);
 /**
  * @brief Execute a command.
  * @param args Null-terminated list of arguments (including command).
+ * @param original_line The original command line for sanitization.
  * @return 1 to continue the loop, 0 to exit.
  */
-int dhsh_execute(char **args);
+int dhsh_execute(char **args, const char *original_line);
 
 /**
  * @brief Built-in command: display history.
  * @param args Command arguments (unused).
  * @return 1 to continue the loop.
  */
-int dhsh_builtin_history(char **args);
+int dhsh_history(char **args);
+
+/**
+ * @brief Get the number of built-in commands.
+ * @return The number of built-in commands.
+ */
+int dhsh_num_builtins(void);
+
+/**
+ * @brief Built-in command: display current directory.
+ * @param args Command arguments (unused).
+ * @return 1 to continue the loop.
+ */
+int dhsh_pwd(char **args);
+
+/**
+ * @brief Built-in command: display environment variables.
+ * @param args Command arguments (unused).
+ * @return 1 to continue the loop.
+ */
+int dhsh_env(char **args);
+
+/**
+ * @brief Built-in command: clear terminal screen.
+ * @param args Command arguments (unused).
+ * @return 1 to continue the loop.
+ */
+int dhsh_clear(char **args);
+
+/**
+ * @brief Built-in command: display current date/time.
+ * @param args Command arguments (unused).
+ * @return 1 to continue the loop.
+ */
+int dhsh_date(char **args);
+
+/**
+ * @brief Built-in command: display current user.
+ * @param args Command arguments (unused).
+ * @return 1 to continue the loop.
+ */
+int dhsh_whoami(char **args);
+
+/**
+ * @brief Built-in command: display set aliases.
+ * @param args Command arguments (unused).
+ * @return 1 to continue the loop.
+ */
+int dhsh_aliases(char **args);
+
+/**
+ * @brief Built-in command: display background jobs.
+ * @param args Command arguments (unused).
+ * @return 1 to continue the loop.
+ */
+int dhsh_jobs(char **args);
+
+/**
+ * @brief Built-in command: display set aliases.
+ * @param args Command arguments (alias definition).
+ * @return 1 to continue the loop.
+ */
+int dhsh_set_alias(char **args);
+
+/**
+ * @brief Built-in command: display config settings.
+ * @param args Command arguments (unused).
+ * @return 1 to continue the loop.
+ */
+int dhsh_config(char **args);
+
+/**
+ * @brief Initialize shell configuration from config file.
+ * @param config_path Path to configuration file.
+ * @return 0 on success, -1 on error.
+ */
+int dhsh_init_config(const char *config_path);
+
+/**
+ * @brief Get a string config value.
+ * @param name Configuration key name.
+ * @return Configuration value, or NULL if not found.
+ */
+const char *dhsh_get_config_string(const char *name);
+
+/**
+ * @brief Get an integer config value.
+ * @param name Configuration key name.
+ * @param default_value Value to return if key not found.
+ * @return Configuration value or default.
+ */
+int dhsh_get_config_int(const char *name, int default_value);
+
+/**
+ * @brief Get a boolean config value.
+ * @param name Configuration key name.
+ * @param default_value Value to return if key not found.
+ * @return Configuration value or default (1=ON, 0=OFF).
+ */
+int dhsh_get_config_bool(const char *name, int default_value);
 
 #endif // DHSH_H
